@@ -1,0 +1,148 @@
+# Java-Map
+// Convert Flat file with fixed position into XML using java mapping
+import java.io.InputStream;
+import java.io.OutputStream;
+
+import java.util.ArrayList;
+import com.sap.aii.mapping.api.AbstractTransformation;
+import com.sap.aii.mapping.api.StreamTransformationException;
+import com.sap.aii.mapping.api.TransformationInput;
+import com.sap.aii.mapping.api.TransformationOutput;
+
+public class Flat2XML extends AbstractTransformation {
+	
+	BufferedReader br = null;
+	BufferedWriter bw = null;
+	String starttag = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+	String starttag1 = "<ns0:MT_PurchaseOrder_Gaisano xmlns:ns0=\"">";
+	String endtag = "</ns0:MT_PurchaseOrder_Gaisano>";
+	
+	public void transform(TransformationInput transformationInput, TransformationOutput transformationOutput) throws StreamTransformationException 
+	{
+		String line = null;
+		String header_fields[] = new String[5];
+		ArrayList<String> detailList = new ArrayList<String>();
+		
+		InputStream in = transformationInput.getInputPayload().getInputStream();
+		OutputStream out = transformationOutput.getOutputPayload().getOutputStream();
+		
+		getTrace.addInfo("START: Calling Java Class \" ");	
+		getTrace.addInfo("----Java Mapping----: XML Conversion Started");
+		getTrace.addInfo("----Java Mapping----: Started reading input file");
+		try
+		{
+			br = new BufferedReader(new InputStreamReader(in));
+		}
+		catch(Exception e) 
+		{
+			getTrace.addInfo("Failed to read input file - ".concat(e.getMessage()));
+		}
+		
+		getTrace.addInfo("----Java Mapping----: succesfully read input file");	
+		getTrace.addInfo("----Java Mapping----: Started writing to XML");
+		try
+		{		
+			bw = new BufferedWriter(new OutputStreamWriter(out));
+			bw.write(starttag);
+			bw.newLine();
+			bw.write(starttag1);
+			bw.newLine();
+			getTrace.addInfo("----Java Mapping----: Started slicing the input flat file data");
+			int head_count = 1;
+			int mat_count = 22;
+			int line_count =21;
+			int index = 0;
+			while((line = br.readLine()) != null)
+			{
+				if(head_count < 7);
+				else if(head_count == 7)
+				{	//Extract PO_Number
+					header_fields[4] = line.substring(15, 21);				
+					//Extract PO_Order Date
+					header_fields[2] = line.substring(80, 88);
+				}
+				else if(head_count == 8)
+				{	//Extract Vendor
+					header_fields[1] = line.substring(15, 21);
+					//Extract Requested Delivery Date
+					header_fields[3] = line.substring(81, 89);					
+				}
+				else if(head_count == 9)
+				{	//Extract Branch
+					header_fields[0] = line.substring(15, 19);					
+				}				
+				else if(head_count>= 21 )
+				{
+					if(line.length()>1){
+					boolean check = line.substring(43, 48).matches("TOTAL");					
+					if(!check && head_count==line_count)
+					{
+						detailList.add(line.substring(60, 69));						
+						detailList.add(line.substring(69, 79));						
+						index++;
+						line_count = line_count+3;
+					}
+					if(!check && head_count==mat_count)
+					{
+						detailList.add(line.substring(6, 19));												
+						mat_count = mat_count + 3;
+					}					
+					if(check)
+						break;
+					}	
+				}						
+				head_count++;				
+			}
+			int k = 0;
+			if(index>0)
+			{
+				for(int i=0; i<index ; i++)
+				{
+					String detail_record[] = new String[3];
+					for (int j=0 ; j<3; j++)
+					{
+						detail_record[j] = detailList.get(k++).toString();
+					}
+					String xmlData = createXML(header_fields, detail_record);
+					bw.write(xmlData);
+					bw.newLine();
+				}
+			}
+			bw.write(endtag); 
+			getTrace.addInfo("----Java Mapping----: Completed writing to XML");
+			bw.close();
+			getTrace.addInfo("----Java Mapping----: XML Conversion Completed");
+		}
+		catch (Exception e) 
+		{
+		  getTrace.addInfo("----Java Mapping----: Error while converting input flat file to xml - ".concat(e.getMessage()));
+		}
+    }
+	private static String createXML(String[] headerStr, String[] detailStr) 
+	{
+		StringBuffer XML = new StringBuffer();
+		XML.append("<Record>");
+		XML.append("\n\t");
+		XML.append("<Branch>" +headerStr[0]+ "</Branch>");
+		XML.append("\n\t");
+		XML.append("<Vendor>" +headerStr[1]+ "</Vendor>");
+		XML.append("\n\t");
+		XML.append("<PO_Date>" +headerStr[2]+ "</PO_Date>");
+		XML.append("\n\t");
+		XML.append("<RDD>" +headerStr[3]+ "</RDD>");
+		XML.append("\n\t");
+		XML.append("<PO_Number>" +headerStr[4]+ "</PO_Number>");
+		XML.append("\n\t");
+		XML.append("<Material>" +detailStr[2]+ "</Material>");
+		XML.append("\n\t");
+		XML.append("<Qty>" +detailStr[0]+ "</Qty>");
+		XML.append("\n\t");		
+		XML.append("<Price>" +detailStr[1]+ "</Price>");
+		XML.append("\n");
+		XML.append("</Record>");
+				
+		return XML.toString();
+	}
+	
+	
+}
